@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image to G-Code ESP Sender</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Image to G-Code</h1>
+          <p>Convert JPEG/PNG line art into plotter G-code and stream it to ESP32 FluidNC/GRBL.</p>
+        </div>
+        <div class="status-pill" id="connectionStatus">Disconnected</div>
+      </header>
+
+      <section class="workspace-grid">
+        <aside class="panel controls-panel" aria-label="Conversion controls">
+          <div class="control-group">
+            <label class="file-drop" for="imageInput">
+              <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp" />
+              <span class="file-drop__title">Choose image</span>
+              <span class="file-drop__hint" id="fileName">PNG, JPEG, or WebP</span>
+            </label>
+          </div>
+
+          <div class="control-group">
+            <h2>Image</h2>
+            <label>
+              Threshold
+              <input id="threshold" type="range" min="0" max="255" value="145" />
+              <span id="thresholdValue">145</span>
+            </label>
+            <label class="checkbox-row">
+              <input id="invert" type="checkbox" />
+              Invert dark/light
+            </label>
+            <label class="checkbox-row">
+              <input id="centerline" type="checkbox" checked />
+              Merge adjacent lines
+            </label>
+            <label>
+              Max processing size
+              <input id="maxProcessSize" type="number" min="128" max="2400" step="64" value="900" />
+            </label>
+          </div>
+
+          <div class="control-group">
+            <h2>Machine</h2>
+            <div class="two-col">
+              <label>
+                Width mm
+                <input id="workWidth" type="number" min="1" step="1" value="120" />
+              </label>
+              <label>
+                Height mm
+                <input id="workHeight" type="number" min="1" step="1" value="80" />
+              </label>
+            </div>
+            <label class="checkbox-row">
+              <input id="keepAspect" type="checkbox" checked />
+              Keep aspect ratio
+            </label>
+            <label class="checkbox-row">
+              <input id="invertY" type="checkbox" checked />
+              Invert Y axis
+            </label>
+            <label>
+              Simplify tolerance mm
+              <input id="simplifyTolerance" type="number" min="0" step="0.05" value="0.35" />
+            </label>
+            <label>
+              Line smoothing
+              <input id="lineSmoothing" type="range" min="0" max="3" step="1" value="1" />
+              <span id="lineSmoothingValue">1</span>
+            </label>
+            <div class="two-col">
+              <label>
+                Travel feed
+                <input id="travelFeed" type="number" min="1" step="10" value="2400" />
+              </label>
+              <label>
+                Draw feed
+                <input id="drawFeed" type="number" min="1" step="10" value="900" />
+              </label>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <h2>Pen</h2>
+            <label>
+              Pen up command
+              <input id="penUp" type="text" value="G0 Z5" spellcheck="false" />
+            </label>
+            <label>
+              Pen down command
+              <input id="penDown" type="text" value="G1 Z0 F300" spellcheck="false" />
+            </label>
+            <div class="segmented" role="group" aria-label="Pen presets">
+              <button type="button" data-preset="z">Z pen</button>
+              <button type="button" data-preset="laser">M3/M5</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <h2>ESP Sender</h2>
+            <label>
+              WebSocket URL
+              <input id="wsUrl" type="text" value="ws://192.168.4.1:81/" spellcheck="false" />
+            </label>
+            <label>
+              Connection mode
+              <select id="wsMode">
+                <option value="auto" selected>Auto detect</option>
+                <option value="may-ve-http">Máy Vẽ HTTP API</option>
+                <option value="raw">Raw GRBL WebSocket</option>
+                <option value="webui-v3">FluidNC WebUI v3</option>
+              </select>
+            </label>
+            <div class="button-row">
+              <button id="connectBtn" type="button">Connect</button>
+              <button id="disconnectBtn" type="button" disabled>Disconnect</button>
+            </div>
+            <div class="button-row">
+              <button id="sendBtn" type="button" disabled>Send job</button>
+              <button id="pauseBtn" type="button" disabled>Pause</button>
+              <button id="resumeBtn" type="button" disabled>Resume</button>
+            </div>
+            <div class="button-row">
+              <button id="statusBtn" type="button" disabled>Status</button>
+              <button id="resetBtn" type="button" disabled>Reset</button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="preview-panel" aria-label="Preview">
+          <div class="preview-toolbar">
+            <div>
+              <h2>Preview</h2>
+              <p id="jobStats">Upload an image to generate toolpaths.</p>
+            </div>
+            <div class="button-row">
+              <button id="regenerateBtn" type="button">Regenerate</button>
+              <button id="downloadBtn" type="button" disabled>Download G-code</button>
+            </div>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="previewCanvas" width="1200" height="800"></canvas>
+          </div>
+        </section>
+
+        <section class="panel gcode-panel" aria-label="G-code output">
+          <div class="panel-heading">
+            <h2>G-code</h2>
+            <button id="copyBtn" type="button" disabled>Copy</button>
+          </div>
+          <textarea id="gcodeOutput" spellcheck="false" aria-label="Generated G-code"></textarea>
+        </section>
+
+        <section class="panel log-panel" aria-label="Connection log">
+          <div class="panel-heading">
+            <h2>Log</h2>
+            <button id="clearLogBtn" type="button">Clear</button>
+          </div>
+          <pre id="logOutput"></pre>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
